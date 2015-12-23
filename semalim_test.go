@@ -40,7 +40,7 @@ func (vc uintOrStringCreator) Do() (interface{}, error) {
 		value = fmt.Sprintf("myValue is: %v", vc.id)
 	}
 
-	// Sleep here for a few
+	// Sleep here for a few, simulate some work
 	sleepNumber := time.Duration(1e4 * rand.Float64())
 	<-time.After(sleepNumber)
 
@@ -52,7 +52,7 @@ func TestRun(t *testing.T) {
 	go func() {
 		defer close(jobBench)
 
-		n := uint64(100)
+		n := uint64(5000)
 
 		for i := uint64(0); i < n; i++ {
 			jobBench <- uintOrStringCreator{id: i}

@@ -41,14 +41,13 @@ func (rs resultSt) Value() interface{} { return rs.value }
 
 func Run(jobs chan Job, workerCount uint64) chan Result {
 	results := make(chan Result)
-	doneCounterChan := make(chan ackType)
 
 	doneChan := make(chan ackType)
-	ackChan := make(chan ackType, workerCount)
+	slots := make(chan ackType, workerCount)
 
-	done := func() { doneChan <- sentinel }
-	ackDone := func() { ackChan <- sentinel }
-	ackWait := func() { <-ackChan }
+	slotWait := func() { <-slots }
+	slotReady := func() { slots <- sentinel }
+	jobDone := func() { doneChan <- sentinel }
 
 	if workerCount < 1 {
 		workerCount = 8 // TODO: Define a proper default
@@ -56,28 +55,27 @@ func Run(jobs chan Job, workerCount uint64) chan Result {
 
 	// Make free room for the workerCount
 	for i := uint64(0); i < workerCount; i++ {
-		ackDone()
+		slotReady()
 	}
 
+	doneCounterChan := make(chan ackType)
 	go func() {
+		defer close(doneCounterChan)
 		for job := range jobs {
-			doneCounterChan <- sentinel
-			if job == nil {
-				ackDone()
-				continue
+			if job != nil {
+				doneCounterChan <- sentinel
+
+				go func(j Job) {
+					slotWait()
+
+					result, err := j.Do()
+					results <- resultSt{id: j.Id(), err: err, value: result}
+
+					slotReady()
+					jobDone()
+				}(job)
 			}
-
-			ackWait()
-
-			go func(j Job) {
-				result, err := j.Do()
-				results <- resultSt{id: j.Id(), err: err, value: result}
-				done()
-				ackDone()
-			}(job)
 		}
-
-		close(doneCounterChan)
 	}()
 
 	go func() {
@@ -91,7 +89,6 @@ func Run(jobs chan Job, workerCount uint64) chan Result {
 		for i := uint64(0); i < doneCount; i++ {
 			<-doneChan
 		}
-
 	}()
 
 	return results
