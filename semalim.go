@@ -81,7 +81,7 @@ func Run(jobs chan Job, workerCount uint64) chan Result {
 	go func() {
 		defer close(results)
 		doneCount := uint64(0)
-		for range doneCounterChan {
+		for _ = range doneCounterChan {
 			doneCount += 1
 		}
 
